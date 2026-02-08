@@ -1,4 +1,4 @@
-name: Meshtastic 固件自动构建
+name: CI
 
 on:
   schedule:
