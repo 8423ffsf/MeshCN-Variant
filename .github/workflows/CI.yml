@@ -9,30 +9,17 @@ on:
       - develop
       - event/*
       - feature/*
-    paths-ignore:
-      - "**.md"
-      - version.properties
-  pull_request_target:
-    branches:
-      - master
-      - develop
-      - event/*
-      - feature/*
-    paths-ignore:
-      - "**.md"
   workflow_dispatch:
 
 jobs:
   build-custom-firmware:
     runs-on: ubuntu-24.04
     steps:
-      # 1. 拉取你的 mtcn 仓库（含 variants）
-      - name: Checkout mtcn
+      - name: Checkout mtcn (your variants)
         uses: actions/checkout@v6
         with:
           path: mtcn
 
-      # 2. 拉取官方 meshtastic/firmware
       - name: Checkout official firmware
         uses: actions/checkout@v6
         with:
@@ -40,16 +27,17 @@ jobs:
           path: firmware
           submodules: recursive
 
-      # 3. 替换 variants（核心需求）
+      # 你要的：替换 variants
       - name: Replace variants
         run: |
           rm -rf firmware/variants
           cp -r mtcn/variants firmware/
 
-      # 4. 环境准备
       - uses: actions/setup-python@v6
         with:
-          python-version: 3.x
+          python-version: "3.11"
+
+      # 重点：进入 firmware 目录再安装依赖！
       - name: Install dependencies
         working-directory: firmware
         run: |
@@ -57,13 +45,13 @@ jobs:
           pip install -U platformio
           pip install -r requirements.txt
 
-      # 5. 直接执行官方构建逻辑
-      - name: Build all firmware
+      # 构建
+      - name: Build firmware
         working-directory: firmware
         run: python build.py --matrix
 
-      # 6. 上传构建好的固件
-      - name: Upload firmware artifacts
+      # 上传结果
+      - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
           name: compiled-firmware
@@ -72,4 +60,3 @@ jobs:
             firmware/release/*.uf2
             firmware/release/*.hex
             firmware/release/*.zip
-          retention-days: 30
