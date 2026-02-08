@@ -1,0 +1,49 @@
+diff --git a/src/graphics/Screen.cpp b/src/graphics/Screen.cpp
+index 0012aeb5d03..a7d840b7a08 100644
+--- a/src/graphics/Screen.cpp
++++ b/src/graphics/Screen.cpp
+@@ -90,6 +90,12 @@ uint16_t TFT_MESH = COLOR565(0x67, 0xEA, 0x94);
+ #include "input/cardKbI2cImpl.h"
+ #endif
+ 
++#if OLED_CJK
++#include <utf8_12x12.h>
++#include <utf8_16x16.h>
++#include <utf8_24x24.h>
++#endif
++
+ using namespace meshtastic; /** @todo remove */
+ 
+ namespace graphics
+@@ -643,7 +649,17 @@ void Screen::setup()
+     }
+ #endif
+ 
+-    // Generate device ID from MAC address
++#ifdef OLED_CJK
++    #if OLED_CJK_SIZE==12
++    dispdev->setUtf8Font(&utf8_12x12_font);
++    #elif OLED_CJK_SIZE==16
++    dispdev->setUtf8Font(&utf8_16x16_font);
++    #elif OLED_CJK_SIZE==24
++    dispdev->setUtf8Font(&utf8_24x24_font);
++    #endif
++#endif
++
++    // === Generate device ID from MAC address ===
+     uint8_t dmac[6];
+     getMacAddr(dmac);
+     snprintf(screen->ourId, sizeof(screen->ourId), "%02x%02x", dmac[4], dmac[5]);
+diff --git a/src/graphics/draw/MessageRenderer.cpp b/src/graphics/draw/MessageRenderer.cpp
+index 09b798e0643..98dba1d14cb 100644
+--- a/src/graphics/draw/MessageRenderer.cpp
++++ b/src/graphics/draw/MessageRenderer.cpp
+@@ -813,7 +813,7 @@ std::vector<std::string> generateLines(OLEDDisplay *display, const char *headerS
+         } else {
+             word += ch;
+             std::string test = line + word;
+-#if defined(OLED_UA) || defined(OLED_RU)
++#if defined(OLED_UA) || defined(OLED_RU) || defined(OLED_CJK)
+             uint16_t strWidth = display->getStringWidth(test.c_str(), test.length(), true);
+ #else
+             uint16_t strWidth = display->getStringWidth(test.c_str());

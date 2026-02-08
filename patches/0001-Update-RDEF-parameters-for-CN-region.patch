@@ -1,0 +1,25 @@
+From c95a32cbe8f770331cad5ecbbeb949dda71aaac7 Mon Sep 17 00:00:00 2001
+From: ssp97 <43690475+ssp97@users.noreply.github.com>
+Date: Wed, 17 Dec 2025 16:27:34 +0800
+Subject: [PATCH 01/28] Update RDEF parameters for CN region
+
+---
+ src/mesh/RadioInterface.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/mesh/RadioInterface.cpp b/src/mesh/RadioInterface.cpp
+index 6660549eb..56155b6b2 100644
+--- a/src/mesh/RadioInterface.cpp
++++ b/src/mesh/RadioInterface.cpp
+@@ -58,7 +58,7 @@ const RegionInfo regions[] = {
+     /*
+         https://lora-alliance.org/wp-content/uploads/2020/11/lorawan_regional_parameters_v1.0.3reva_0.pdf
+      */
+-    RDEF(CN, 470.0f, 510.0f, 100, 0, 19, true, false, false),
++    RDEF(CN, 470.0f, 510.0f, 100, 0, 22, true, false, false),
+ 
+     /*
+         https://lora-alliance.org/wp-content/uploads/2020/11/lorawan_regional_parameters_v1.0.3reva_0.pdf
+-- 
+2.51.0.windows.2
+
