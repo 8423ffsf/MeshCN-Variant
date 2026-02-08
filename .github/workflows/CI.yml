@@ -12,7 +12,6 @@ on:
     paths-ignore:
       - "**.md"
       - version.properties
-
   pull_request_target:
     branches:
       - master
@@ -21,132 +20,56 @@ on:
       - feature/*
     paths-ignore:
       - "**.md"
-
   workflow_dispatch:
 
 jobs:
-  setup:
-    strategy:
-      fail-fast: true
-      matrix:
-        arch: [all, check]
+  build-custom-firmware:
     runs-on: ubuntu-24.04
     steps:
-      # 拉取你的 mtcn 仓库
-      - name: Checkout your mtcn repo
+      # 1. 拉取你的 mtcn 仓库（含 variants）
+      - name: Checkout mtcn
         uses: actions/checkout@v6
         with:
-          repository: 8423ffsf/mtcn
           path: mtcn
 
-      # 拉取官方 firmware 仓库
-      - name: Checkout official meshtastic/firmware
+      # 2. 拉取官方 meshtastic/firmware
+      - name: Checkout official firmware
         uses: actions/checkout@v6
         with:
           repository: meshtastic/firmware
           path: firmware
           submodules: recursive
 
-      # 替换 variants
-      - name: Replace variants with your version
+      # 3. 替换 variants（核心需求）
+      - name: Replace variants
         run: |
           rm -rf firmware/variants
           cp -r mtcn/variants firmware/
 
+      # 4. 环境准备
       - uses: actions/setup-python@v6
         with:
           python-version: 3.x
-          cache: pip
-      - run: pip install -U platformio
-
-      - name: Generate build matrix
-        id: jsonStep
+      - name: Install dependencies
         working-directory: firmware
         run: |
-          if [[ "$GITHUB_HEAD_REF" == "" ]]; then
-            TARGETS=$(./bin/generate_ci_matrix.py ${{matrix.arch}})
-          else
-            TARGETS=$(./bin/generate_ci_matrix.py ${{matrix.arch}} --level pr)
-          fi
-          echo "${{matrix.arch}}=$TARGETS" >> $GITHUB_OUTPUT
-    outputs:
-      all: ${{ steps.jsonStep.outputs.all }}
-      check: ${{ steps.jsonStep.outputs.check }}
+          python -m pip install --upgrade pip
+          pip install -U platformio
+          pip install -r requirements.txt
 
-  version:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout official firmware
-        uses: actions/checkout@v6
-        with:
-          repository: meshtastic/firmware
-          path: firmware
-      - name: Get version string
+      # 5. 直接执行官方构建逻辑
+      - name: Build all firmware
         working-directory: firmware
-        run: |
-          echo "long=$(./bin/buildinfo.py long)" >> $GITHUB_OUTPUT
-          echo "deb=$(./bin/buildinfo.py deb)" >> $GITHUB_OUTPUT
-        id: version
-        env:
-          BUILD_LOCATION: local
-    outputs:
-      long: ${{ steps.version.outputs.long }}
-      deb: ${{ steps.version.outputs.deb }}
+        run: python build.py --matrix
 
-  # 核心：跨仓库调用官方 build_firmware.yml
-  build:
-    needs: [setup, version]
-    strategy:
-      fail-fast: false
-      matrix:
-        build: ${{ fromJson(needs.setup.outputs.all) }}
-    uses: meshtastic/firmware/.github/workflows/build_firmware.yml@master
-    with:
-      version: ${{ needs.version.outputs.long }}
-      pio_env: ${{ matrix.build.board }}
-      platform: ${{ matrix.build.platform }}
-
-  # 只保留打包固件，不依赖任何你没有的本地 workflow
-  gather-artifacts:
-    permissions:
-      contents: write
-      pull-requests: write
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - esp32
-          - esp32s3
-          - esp32c3
-          - esp32c6
-          - nrf52840
-          - rp2040
-          - rp2350
-          - stm32
-    runs-on: ubuntu-latest
-    needs: [version, build]
-    steps:
-      - uses: actions/download-artifact@v7
-        with:
-          path: ./
-          pattern: firmware-${{matrix.arch}}-*
-          merge-multiple: true
-
-      - name: Package final firmware
+      # 6. 上传构建好的固件
+      - name: Upload firmware artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: firmware-${{matrix.arch}}-${{ needs.version.outputs.long }}
-          overwrite: true
+          name: compiled-firmware
           path: |
-            ./firmware-*.mt.json
-            ./firmware-*.bin
-            ./firmware-*.uf2
-            ./firmware-*.hex
-            ./firmware-*.zip
-            ./device-*.sh
-            ./device-*.bat
-            ./littlefs-*.bin
-            ./bleota*bin
-            ./mt-*-ota.bin
-            ./Meshtastic_nRF52_factory_erase*.uf2
+            firmware/release/*.bin
+            firmware/release/*.uf2
+            firmware/release/*.hex
+            firmware/release/*.zip
           retention-days: 30
