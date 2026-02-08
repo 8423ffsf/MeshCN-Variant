@@ -7,7 +7,6 @@ on:
     branches:
       - master
       - develop
-      - pioarduino
       - event/*
       - feature/*
     paths-ignore:
@@ -18,7 +17,6 @@ on:
     branches:
       - master
       - develop
-      - pioarduino
       - event/*
       - feature/*
     paths-ignore:
@@ -34,25 +32,26 @@ jobs:
         arch: [all, check]
     runs-on: ubuntu-24.04
     steps:
-      # -------------- 你的替换逻辑（只改这里）--------------
+      # 拉取你的 mtcn 仓库
       - name: Checkout your mtcn repo
         uses: actions/checkout@v6
         with:
           repository: 8423ffsf/mtcn
           path: mtcn
 
-      - name: Checkout official firmware
+      # 拉取官方 firmware 仓库
+      - name: Checkout official meshtastic/firmware
         uses: actions/checkout@v6
         with:
           repository: meshtastic/firmware
           path: firmware
           submodules: recursive
 
-      - name: Replace variants folder
+      # 替换 variants
+      - name: Replace variants with your version
         run: |
           rm -rf firmware/variants
           cp -r mtcn/variants firmware/
-      # -----------------------------------------------------
 
       - uses: actions/setup-python@v6
         with:
@@ -60,7 +59,7 @@ jobs:
           cache: pip
       - run: pip install -U platformio
 
-      - name: Generate matrix
+      - name: Generate build matrix
         id: jsonStep
         working-directory: firmware
         run: |
@@ -82,7 +81,7 @@ jobs:
         with:
           repository: meshtastic/firmware
           path: firmware
-      - name: Get version
+      - name: Get version string
         working-directory: firmware
         run: |
           echo "long=$(./bin/buildinfo.py long)" >> $GITHUB_OUTPUT
@@ -94,34 +93,7 @@ jobs:
       long: ${{ steps.version.outputs.long }}
       deb: ${{ steps.version.outputs.deb }}
 
-  check:
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        check: ${{ fromJson(needs.setup.outputs.check) }}
-    runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch'
-    steps:
-      - name: Checkout official firmware
-        uses: actions/checkout@v6
-        with:
-          repository: meshtastic/firmware
-          path: firmware
-          submodules: recursive
-      - name: Replace variants again for check job
-        run: |
-          rm -rf firmware/variants
-          sudo apt-get install -y git
-          git clone https://github.com/8423ffsf/mtcn.git mtcn
-          cp -r mtcn/variants firmware/
-      - name: Run check
-        uses: meshtastic/gh-action-firmware@main
-        with:
-          pio_platform: ${{ matrix.check.platform }}
-          pio_env: ${{ matrix.check.board }}
-          pio_target: check
-
+  # 核心：跨仓库调用官方 build_firmware.yml
   build:
     needs: [setup, version]
     strategy:
@@ -134,48 +106,7 @@ jobs:
       pio_env: ${{ matrix.build.board }}
       platform: ${{ matrix.build.platform }}
 
-  # 下面全是官方原版，我一个字没动
-  build-debian-src:
-    if: github.repository == 'meshtastic/firmware'
-    uses: ./.github/workflows/build_debian_src.yml
-    with:
-      series: UNRELEASED
-      build_location: local
-    secrets: inherit
-
-  package-pio-deps-native-tft:
-    if: ${{ github.repository == 'meshtastic/firmware' && github.event_name == 'workflow_dispatch' }}
-    uses: ./.github/workflows/package_pio_deps.yml
-    with:
-      pio_env: native-tft
-    secrets: inherit
-
-  test-native:
-    if: ${{ !contains(github.ref_name, 'event/') && github.repository == 'meshtastic/firmware' }}
-    uses: ./.github/workflows/test_native.yml
-
-  docker:
-    strategy:
-      fail-fast: false
-      matrix:
-        distro: [debian, alpine]
-        platform: [linux/amd64, linux/arm64, linux/arm/v7]
-        pio_env: [native, native-tft]
-        exclude:
-          - distro: alpine
-            platform: linux/arm/v7
-          - pio_env: native-tft
-            platform: linux/arm64
-          - pio_env: native-tft
-            platform: linux/arm/v7
-    uses: ./.github/workflows/docker_build.yml
-    with:
-      distro: ${{ matrix.distro }}
-      platform: ${{ matrix.platform }}
-      runs-on: ${{ contains(matrix.platform, 'arm') && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
-      pio_env: ${{ matrix.pio_env }}
-      push: false
-
+  # 只保留打包固件，不依赖任何你没有的本地 workflow
   gather-artifacts:
     permissions:
       contents: write
@@ -195,13 +126,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [version, build]
     steps:
-      - uses: actions/checkout@v6
       - uses: actions/download-artifact@v7
         with:
           path: ./
           pattern: firmware-${{matrix.arch}}-*
           merge-multiple: true
-      - name: Repackage firmware
+
+      - name: Package final firmware
         uses: actions/upload-artifact@v6
         with:
           name: firmware-${{matrix.arch}}-${{ needs.version.outputs.long }}
@@ -219,109 +150,3 @@ jobs:
             ./mt-*-ota.bin
             ./Meshtastic_nRF52_factory_erase*.uf2
           retention-days: 30
-      - name: Zip final firmware
-        run: |
-          mkdir -p output
-          unzip -oq firmware-${{matrix.arch}}-${{ needs.version.outputs.long }}.zip -d output
-          zip -j -9 -r ./firmware-${{matrix.arch}}-${{ needs.version.outputs.long }}.zip ./output
-      - name: Upload elfs
-        uses: actions/upload-artifact@v6
-        with:
-          name: debug-elfs-${{matrix.arch}}-${{ needs.version.outputs.long }}
-          overwrite: true
-          path: ./*.elf
-          retention-days: 30
-
-  shame:
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    needs: [build]
-    steps:
-      - uses: actions/checkout@v6
-        if: github.event_name == 'pull_request_target'
-        with:
-          filter: blob:none
-          fetch-depth: 0
-      - uses: actions/download-artifact@v7
-        with:
-          path: ./manifests-new/
-          pattern: manifest-*
-          merge-multiple: true
-      - uses: actions/upload-artifact@v6
-        with:
-          name: manifests-${{ github.sha }}
-          overwrite: true
-          path: manifests-new/*.mt.json
-
-  release-artifacts:
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: [setup, version, gather-artifacts, build-debian-src, package-pio-deps-native-tft]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: 3.x
-      - name: Generate release notes
-        id: release_notes
-        run: |
-          chmod +x ./bin/generate_release_notes.py
-          NOTES=$(./bin/generate_release_notes.py ${{ needs.version.outputs.long }})
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      - name: Create release
-        uses: softprops/gh-release@v2
-        id: create_release
-        with:
-          draft: true
-          prerelease: true
-          name: Meshtastic Firmware ${{ needs.version.outputs.long }} Alpha
-          tag_name: v${{ needs.version.outputs.long }}
-          body: ${{ steps.release_notes.outputs.notes }}
-
-  release-firmware:
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [esp32, esp32s3, esp32c3, esp32c6, nrf52840, rp2040, rp2350, stm32]
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: [release-artifacts, version]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: firmware-${{matrix.arch}}-${{ needs.version.outputs.long }}
-          merge-multiple: true
-          path: ./output
-      - name: Zip firmware
-        run: zip -j -9 -r ./firmware-${{matrix.arch}}-${{ needs.version.outputs.long }}.zip ./output
-
-  publish-firmware:
-    runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: [release-firmware, version]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v6
-        with:
-          python-version: 3.x
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: firmware-*-${{ needs.version.outputs.long }}
-          merge-multiple: true
-          path: ./publish
-      - name: Publish to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          deploy_key: ${{ secrets.DIST_PAGES_DEPLOY_KEY }}
-          external_repository: meshtastic/meshtastic.github.io
-          publish_branch: master
-          publish_dir: ./publish
-          destination_dir: firmware-${{ needs.version.outputs.long }}
-          keep_files: true
