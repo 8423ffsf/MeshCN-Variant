@@ -106,7 +106,7 @@ jobs:
           pio pkg install -g -t tool-esptoolpy
 
       # 编译当前设备
-      - name: build: ${{ matrix.build.board }}
+      - name: 构建设备 ${{ matrix.build.board }}
         run: |
           cd firmware
           pio run -e ${{ matrix.build.board }}
