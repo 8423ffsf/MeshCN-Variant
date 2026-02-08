@@ -13,19 +13,18 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout your repo (mtcn)
+      - name: Checkout your mtcn repo
         uses: actions/checkout@v6
         with:
           path: mtcn
 
-      - name: Checkout meshtastic/firmware
+      - name: Checkout official meshtastic/firmware
         uses: actions/checkout@v6
         with:
           repository: meshtastic/firmware
           path: firmware
           submodules: recursive
 
-      # 你要的核心：替换 variants
       - name: Replace variants
         run: |
           rm -rf firmware/variants
@@ -36,20 +35,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 只装 platformio，不读 requirements.txt！
       - name: Install PlatformIO
         run: |
           cd firmware
           python -m pip install -U pip
           python -m pip install -U platformio
 
-      # 直接构建，这是官方真正的命令
+      # 这里才是正确的构建命令！
       - name: Build firmware
         run: |
           cd firmware
-          python build.py --matrix
+          python ./bin/build.py --matrix
 
-      # 上传固件
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
