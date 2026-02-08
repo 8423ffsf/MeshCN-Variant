@@ -29,7 +29,7 @@ jobs:
         run: |
           rm -rf firmware/variants
           cp -r mtcn/variants firmware/
-          # 如果你改了 platformio.ini，也一起覆盖
+     
           [ -f mtcn/platformio.ini ] && cp mtcn/platformio.ini firmware/
 
       - name: Setup Python
@@ -41,7 +41,7 @@ jobs:
         run: |
           python -m pip install -U platformio
 
-      # 👇 用「你修改后的代码」生成矩阵（包含你新加的变种）
+      
       - name: 生成构建矩阵
         id: gen-matrix
         run: |
