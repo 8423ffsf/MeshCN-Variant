@@ -1,13 +1,10 @@
 name: CI
-concurrency:
-  group: ci-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: true
 on:
-  workflow_dispatch:
+  schedule:
+    - cron: '0 */2 * * *'  # 每 2 小时
+  workflow_dispatch:      # 手动运行
   push:
-    branches:
-      - master
-      - main
+    branches: [ master, main ]
 
 jobs:
   build:
@@ -40,17 +37,16 @@ jobs:
           python -m pip install -U pip
           python -m pip install -U platformio
 
-      # 正确：直接编译所有环境
-      - name: Build all firmware
+      - name: Build tbeam
         run: |
           cd firmware
-          pio run
+          pio run -e tbeam
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
           name: compiled-firmware
           path: |
-            firmware/.pio/build/**/*.bin
-            firmware/.pio/build/**/*.uf2
-            firmware/.pio/build/**/*.hex
+            firmware/.pio/build/tbeam/*.bin
+            firmware/.pio/build/tbeam/*.uf2
+            firmware/.pio/build/tbeam/*.hex
