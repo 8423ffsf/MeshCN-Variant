@@ -9,6 +9,17 @@ on:
       - develop
       - event/*
       - feature/*
+    paths-ignore:
+      - "**.md"
+      - version.properties
+  pull_request_target:
+    branches:
+      - master
+      - develop
+      - event/*
+      - feature/*
+    paths-ignore:
+      - "**.md"
   workflow_dispatch:
 
 jobs:
@@ -20,15 +31,14 @@ jobs:
         with:
           path: mtcn
 
-      - name: Checkout official firmware
+      - name: Checkout official meshtastic/firmware
         uses: actions/checkout@v6
         with:
           repository: meshtastic/firmware
           path: firmware
           submodules: recursive
 
-      # 你要的：替换 variants
-      - name: Replace variants
+      - name: Replace variants folder
         run: |
           rm -rf firmware/variants
           cp -r mtcn/variants firmware/
@@ -37,21 +47,20 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 重点：进入 firmware 目录再安装依赖！
+      # 关键：全部用 cd 进入目录，绝对不迷路
       - name: Install dependencies
-        working-directory: firmware
         run: |
+          cd firmware
           python -m pip install --upgrade pip
           pip install -U platformio
           pip install -r requirements.txt
 
-      # 构建
-      - name: Build firmware
-        working-directory: firmware
-        run: python build.py --matrix
+      - name: Build all firmware
+        run: |
+          cd firmware
+          python build.py --matrix
 
-      # 上传结果
-      - name: Upload artifacts
+      - name: Upload built firmware
         uses: actions/upload-artifact@v6
         with:
           name: compiled-firmware
@@ -60,3 +69,5 @@ jobs:
             firmware/release/*.uf2
             firmware/release/*.hex
             firmware/release/*.zip
+            firmware/release/*.mt.json
+          retention-days: 30
